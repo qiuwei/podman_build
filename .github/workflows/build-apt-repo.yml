@@ -157,10 +157,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # This step previously used `curl -fsS` with no -L and reported success on
-      # a 301 redirect, so it passed without ever fetching the Release file --
-      # a false positive that hid a broken Pages setup. Follow redirects, and
-      # validate the *contents* rather than trusting the status code.
+      # Both failure modes below were hit for real, so this step is deliberately
+      # shaped the way it is:
+      #   * `curl -fsS` with no -L accepted a 301 redirect as success, so an
+      #     earlier version "passed" without fetching anything at all.
+      #   * Waiting only on Release broke out on the *previous* deploy's copy,
+      #     which Pages still served from cache, and then failed the signing
+      #     assertion against a snapshot that had not yet propagated.
+      # So: wait on InRelease. It is the file apt fetches first, and on its own
+      # it proves the deploy landed AND that the snapshot was signed.
       - name: Verify the published repo is consumable
         run: |
           set -euo pipefail
@@ -169,31 +174,31 @@ jobs:
 
           ok=0
           for attempt in $(seq 1 30); do
-            if curl -fsSL "${base}/dists/jammy/Release" -o /tmp/Release 2>/dev/null \
-               && grep -q '^Suite: jammy' /tmp/Release; then
-              echo "Release file is live after ${attempt} attempt(s):"
-              grep -E '^(Origin|Label|Suite|Codename|Architectures|Components):' /tmp/Release
+            if curl -fsSL "${base}/dists/jammy/InRelease" -o /tmp/InRelease 2>/dev/null \
+               && grep -q '^Suite: jammy' /tmp/InRelease; then
               ok=1
               break
             fi
             sleep 10
           done
           if [ "$ok" -ne 1 ]; then
-            echo "::error::Pages did not serve a valid dists/jammy/Release within 5 minutes."
-            echo "::error::If ${base} redirects to a custom domain, that domain must resolve and serve over HTTPS."
+            echo "::error::Pages did not serve a valid dists/jammy/InRelease within 5 minutes."
+            echo "::error::If it 404s: either the GPG secrets are unset (unsigned repo is not"
+            echo "::error::published as InRelease), or Pages is not enabled with source=gh-pages."
+            echo "::error::If ${base} redirects, a custom domain must resolve over HTTPS."
             exit 1
           fi
-
-          # An unsigned repo is unusable -- apt refuses it outright. Without
-          # GPG_PRIVATE_KEY/GPG_PASSPHRASE the aptly action silently publishes
-          # an unsigned snapshot, so fail loudly instead of shipping something
-          # that cannot be consumed.
-          if ! curl -fsSL "${base}/dists/jammy/InRelease" -o /tmp/InRelease 2>/dev/null; then
-            echo "::error::dists/jammy/InRelease is missing -- the repo is UNSIGNED."
-            echo "::error::Set the GPG_PRIVATE_KEY and GPG_PASSPHRASE repository secrets, then re-run."
-            exit 1
-          fi
-          echo "OK: InRelease present, repository is signed."
+          echo "InRelease live after ${attempt} attempt(s); repository is signed:"
+          grep -E '^(Origin|Label|Suite|Codename|Architectures|Components|Date):' /tmp/InRelease
 
           curl -fsSL "${base}/${{ env.REPO_NAME }}.asc" -o /tmp/key.asc
-          echo "OK: exported signing key $(head -1 /tmp/key.asc)"
+          echo "OK: signing key published as ${{ env.REPO_NAME }}.asc"
+
+          # Finally, assert the index actually advertises the packages -- a
+          # signed but empty repo would otherwise sail through.
+          curl -fsSL "${base}/dists/jammy/stable/binary-amd64/Packages" -o /tmp/Packages
+          for pkg in podman conmon; do
+            grep -qx "Package: ${pkg}" /tmp/Packages || { echo "::error::${pkg} missing from the Packages index"; exit 1; }
+          done
+          echo "OK: index advertises:"
+          grep -E '^(Package|Version):' /tmp/Packages | paste - - | sed 's/^/  /'

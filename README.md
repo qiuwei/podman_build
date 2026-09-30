@@ -4,7 +4,7 @@ GitHub Actions builds podman and conmon from upstream source tags inside a real
 Ubuntu 22.04 environment, packages them as `.deb`s, and publishes them as a
 signed apt repository on GitHub Pages.
 
-**Published repo:** `https://<owner>.github.io/podman_build`
+**Published repo:** `https://qiuwei.github.io/podman_build`
 
 ## Why this exists
 
@@ -45,6 +45,46 @@ The binding constraint is the **network backend**, not Go:
 Within the series we track the newest patch (`4.9.5`). The fleet currently runs
 `4.9.3` on frankfurt, so this is a straightforward upgrade.
 
+## One-time repository setup
+
+Two settings are mandatory. Omit either and the workflow still "succeeds" at
+publishing while producing something apt cannot use — so the final verification
+step now asserts both and fails the run instead.
+
+**1. Enable Pages with source = `gh-pages`.** Settings → Pages → Source: *Deploy
+from a branch*, Branch `gh-pages`, folder `/`. Without this the `gh-pages` branch
+is written but never served.
+
+**2. Add the signing secrets.** `GPG_PRIVATE_KEY` (ASCII-armored private key) and
+`GPG_PASSPHRASE`. Without them the aptly action publishes an **unsigned**
+snapshot with no `InRelease`, and apt rejects unsigned repositories outright.
+
+```bash
+# Keep the key out of your personal keyring.
+export GNUPGHOME=~/podman_build_signing/gnupg
+mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+gpg --batch --gen-key <<'EOF'
+Key-Type: RSA
+Key-Length: 4096
+Name-Real: podman_build apt repository
+Name-Email: podman-build@qiu.es
+Expire-Date: 0
+%commit
+EOF
+FPR=$(gpg --list-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
+gpg --batch --pinentry-mode loopback --passphrase '<passphrase>' \
+    --armor --export-secret-keys "$FPR" > private.asc
+gh secret set GPG_PRIVATE_KEY < private.asc
+gh secret set GPG_PASSPHRASE --body '<passphrase>'
+```
+
+Two traps worth knowing: exporting a passphrase-protected key *without*
+`--pinentry-mode loopback --passphrase` writes an **empty file**, so the secret
+gets set to nothing and the failure is silent. And a **custom domain on any
+Pages site in the account** hijacks the whole `<user>.github.io` domain — a repo
+named `<user>.github.com` counts as a legacy user site and will redirect every
+project page, including this one, to its domain.
+
 ## Using the repository
 
 Install the signing key and source list, then pin the repo so it cannot drag in
@@ -52,22 +92,22 @@ unrelated upgrades:
 
 ```bash
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://<owner>.github.io/podman_build/podman.asc \
+curl -fsSL https://qiuwei.github.io/podman_build/podman.asc \
   | sudo tee /etc/apt/keyrings/podman.asc >/dev/null
 
 echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/podman.asc] \
-https://<owner>.github.io/podman_build jammy stable" \
+https://qiuwei.github.io/podman_build jammy stable" \
   | sudo tee /etc/apt/sources.list.d/podman.list
 
 # Keep this repo scoped to the container tooling. Without this, anything it
 # happens to publish could win a version comparison against a distro package.
 sudo tee /etc/apt/preferences.d/podman.pref >/dev/null <<'EOF'
 Package: *
-Pin: origin <owner>.github.io
+Pin: origin qiuwei.github.io
 Pin-Priority: 100
 
 Package: podman podman-docker conmon
-Pin: origin <owner>.github.io
+Pin: origin qiuwei.github.io
 Pin-Priority: 990
 EOF
 
