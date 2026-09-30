@@ -1,0 +1,16 @@
+Package: podman-docker
+Version: @VERSION@
+Architecture: amd64
+Maintainer: @MAINTAINER@
+Section: admin
+Priority: optional
+Homepage: https://podman.io
+Description: Emulate the Docker CLI with podman
+ Installs a /usr/bin/docker shim that forwards to podman, so tooling which shells
+ out to `docker` works against podman unchanged.
+ .
+ Optional. Only install this on hosts that do not have a real Docker daemon.
+Depends: podman (= @VERSION@)
+# A real Docker install owns /usr/bin/docker; refuse to coexist rather than
+# silently hijacking it.
+Conflicts: docker.io, docker-ce, docker-ce-cli, docker-engine

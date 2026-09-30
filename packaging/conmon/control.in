@@ -1,0 +1,19 @@
+Package: conmon
+Version: @VERSION@
+Architecture: amd64
+Maintainer: @MAINTAINER@
+Section: admin
+Priority: optional
+Homepage: https://github.com/containers/conmon
+Description: OCI container runtime monitor (built from source)
+ Conmon is a small program that sits between a container runtime (crun, runc)
+ and podman, supervising the container process and handling logging, TTY
+ handling and exit status reporting.
+ .
+ Built from the upstream v@UPSTREAM_VERSION@ tag. jammy ships conmon 2.0.25, which
+ is four years older than podman 4.9.3 and below the version podman 4.x expects,
+ so this package supersedes it. The podman package depends on
+ `conmon (>= 2.1.0)`, which apt cannot satisfy from jammy -- so this repository's
+ build is always the one selected.
+Replaces: conmon
+Provides: conmon

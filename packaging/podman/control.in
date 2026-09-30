@@ -1,0 +1,45 @@
+Package: podman
+Version: @VERSION@
+Architecture: amd64
+Maintainer: @MAINTAINER@
+Section: admin
+Priority: optional
+Homepage: https://podman.io
+Description: Manage pods, containers and container images (built from source)
+ Podman is a daemonless container engine for developing, managing and running
+ OCI containers and pods.
+ .
+ This is NOT the distribution package. It is built from the upstream
+ v@UPSTREAM_VERSION@ release tag and targeted at Ubuntu 22.04 (jammy), where the
+ distribution ships only podman 3.4.4. See the packaging notes in the source
+ repository for why 4.9.3 is the newest release that can be built here.
+ .
+ Build tags used: seccomp, systemd, apparmor, excluding the btrfs and
+ devicemapper graph drivers.
+# Runtime dependencies, in three groups:
+#   1. container tooling jammy already provides (conmon is version-floored
+#      because jammy's 2.0.25 predates what podman 4.x expects)
+#   2. shared libraries the pinned build tags link against -- these correspond
+#      one-to-one with BUILDTAGS in scripts/20-build-podman.sh
+#   3. base system libraries
+Depends: conmon (>= 2.1.0),
+         crun | runc,
+         containernetworking-plugins,
+         iptables,
+         tzdata,
+         libapparmor1,
+         libc6 (>= 2.34),
+         libgpgme11 (>= 1.4.1),
+         libseccomp2 (>= 2.5.0),
+         libsqlite3-0,
+         libsystemd0
+Recommends: buildah,
+            catatonit,
+            fuse-overlayfs,
+            slirp4netns,
+            uidmap
+Suggests: podman-docker
+# No Conflicts on the distro podman: this package *replaces* it, and a Conflicts
+# without a matching Replaces would make the upgrade fail outright.
+Replaces: podman
+Provides: podman

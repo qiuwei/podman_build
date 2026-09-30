@@ -1,0 +1,9 @@
+# Local build output
+out/
+
+# The aptly snapshot tree is generated in CI, never committed
+podman-snapshot/
+
+# Editor / OS noise
+*.swp
+.DS_Store

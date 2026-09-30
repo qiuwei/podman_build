@@ -1,0 +1,174 @@
+---
+name: Build podman for jammy and publish apt repo
+
+# Builds podman + conmon from source inside a real Ubuntu 22.04 environment,
+# turns the .debs into a signed apt repository, and publishes it to GitHub
+# Pages on the `gh-pages` branch.
+#
+# The published repo is served at:
+#   https://<owner>.github.io/<repo>/
+# and consumed with the .list file generated into the repo root.
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      podman_version:
+        description: "podman upstream tag to build (without the leading v)"
+        required: false
+        default: "4.9.3"
+      conmon_version:
+        description: "conmon upstream tag to build (without the leading v)"
+        required: false
+        default: "2.2.1"
+      deb_revision:
+        description: "debian revision suffix; bump to rebuild the same upstream version"
+        required: false
+        default: "1"
+
+# Needed so the publish job can push to gh-pages.
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # podman 4.9.3 is the newest release that builds with jammy's Go 1.18. podman
+  # 5.x/6.x require Go 1.26, and 4.9.3 is also the last series with the CNI
+  # backend that jammy's package set can actually support (no netavark/aardvark).
+  PODMAN_VERSION: ${{ inputs.podman_version || '4.9.3' }}
+  CONMON_VERSION: ${{ inputs.conmon_version || '2.2.1' }}
+  DEB_REVISION: ${{ inputs.deb_revision || '1' }}
+  SUITE: jammy
+  # The repository slug used for the aptly repo, the published .list filename
+  # and the exported signing key name.
+  REPO_NAME: podman
+
+jobs:
+  build:
+    name: Build debs
+    runs-on: ubuntu-24.04
+    # Pin the *build* environment to jammy even though the runner is newer, so
+    # the binaries link against jammy's glibc and libraries. This is the whole
+    # point: the artifact must be jammy-native.
+    container: ubuntu:22.04
+    steps:
+      # The ubuntu:22.04 image has no git, so checkout would fall back to the
+      # REST API and produce a tree without .git.
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Install build dependencies
+        run: src/scripts/00-build-deps.sh
+
+      - name: Build conmon
+        run: src/scripts/10-build-conmon.sh
+
+      - name: Build podman
+        run: src/scripts/20-build-podman.sh
+
+      - name: Assemble debs
+        run: src/scripts/30-make-debs.sh
+
+      # The build tree lives at /build, outside the checkout. Copy the results
+      # into the workspace so the artifact upload uses an ordinary relative path.
+      - name: Collect debs
+        run: |
+          mkdir -p debs
+          cp /build/out/*.deb debs/
+          echo "=== built ==="
+          ls -la debs/
+          for deb in debs/*.deb; do
+            echo "--- $deb"
+            dpkg-deb -f "$deb" Package Version Depends
+          done
+
+      - name: Upload debs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: debs/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  # Turn the debs into a signed apt repository snapshot, then publish it.
+  # Split from `build` so that a PR can still produce the repo artifact for
+  # inspection without touching the live Pages site.
+  publish:
+    name: Publish apt repo
+    needs: build
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Download debs
+        uses: actions/download-artifact@v4
+        with:
+          name: debs
+          path: debs
+
+      - name: Create apt repo
+        uses: jinnatar/actions-aptly-repo@v2
+        with:
+          name: ${{ env.REPO_NAME }}
+          prefix: .
+          repo_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          artifact_name: ${{ env.REPO_NAME }}-snapshot
+          # distribution,category,architectures,import,glob
+          #
+          # amd64 only, by design -- this fleet is x86_64. (If arm64 is ever
+          # needed, note that home:/alvistack on OBS is amd64-only too, and
+          # kubic unstable is the only third-party jammy source shipping arm64.)
+          #
+          # `false` means each run replaces the snapshot rather than merging
+          # into the previously published one. Old versions therefore drop out
+          # of the repo once superseded -- pin exact versions on hosts that need
+          # to hold one.
+          repos: |
+            jammy,stable,\"amd64\",false,debs/*.deb
+          gpg_private_key: "${{ secrets.GPG_PRIVATE_KEY }}"
+          gpg_passphrase: "${{ secrets.GPG_PASSPHRASE }}"
+
+      # The aptly action publishes the finished tree as an *artifact*, it does
+      # not leave a directory behind -- so pull it back down before deploying.
+      - name: Download repo snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.REPO_NAME }}-snapshot
+          path: snapshot
+
+      - name: Publish to GitHub Pages
+        uses: crazy-max/ghaction-github-pages@v4
+        with:
+          target_branch: gh-pages
+          build_dir: snapshot
+          keep_history: false
+          allow_empty_commit: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the published repo is consumable
+        run: |
+          set -euo pipefail
+          base="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          echo "Waiting for Pages to serve the new snapshot..."
+          for attempt in $(seq 1 30); do
+            if curl -fsS "${base}/dists/jammy/Release" -o /tmp/Release; then
+              echo "Release file is live after ${attempt} attempt(s)"
+              grep -E '^(Origin|Suite|Codename|Architectures):' /tmp/Release || true
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Pages did not serve dists/jammy/Release within 5 minutes"
+          exit 1
