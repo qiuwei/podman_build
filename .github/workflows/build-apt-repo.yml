@@ -157,18 +157,43 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # This step previously used `curl -fsS` with no -L and reported success on
+      # a 301 redirect, so it passed without ever fetching the Release file --
+      # a false positive that hid a broken Pages setup. Follow redirects, and
+      # validate the *contents* rather than trusting the status code.
       - name: Verify the published repo is consumable
         run: |
           set -euo pipefail
           base="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           echo "Waiting for Pages to serve the new snapshot..."
+
+          ok=0
           for attempt in $(seq 1 30); do
-            if curl -fsS "${base}/dists/jammy/Release" -o /tmp/Release; then
-              echo "Release file is live after ${attempt} attempt(s)"
-              grep -E '^(Origin|Suite|Codename|Architectures):' /tmp/Release || true
-              exit 0
+            if curl -fsSL "${base}/dists/jammy/Release" -o /tmp/Release 2>/dev/null \
+               && grep -q '^Suite: jammy' /tmp/Release; then
+              echo "Release file is live after ${attempt} attempt(s):"
+              grep -E '^(Origin|Label|Suite|Codename|Architectures|Components):' /tmp/Release
+              ok=1
+              break
             fi
             sleep 10
           done
-          echo "::error::Pages did not serve dists/jammy/Release within 5 minutes"
-          exit 1
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Pages did not serve a valid dists/jammy/Release within 5 minutes."
+            echo "::error::If ${base} redirects to a custom domain, that domain must resolve and serve over HTTPS."
+            exit 1
+          fi
+
+          # An unsigned repo is unusable -- apt refuses it outright. Without
+          # GPG_PRIVATE_KEY/GPG_PASSPHRASE the aptly action silently publishes
+          # an unsigned snapshot, so fail loudly instead of shipping something
+          # that cannot be consumed.
+          if ! curl -fsSL "${base}/dists/jammy/InRelease" -o /tmp/InRelease 2>/dev/null; then
+            echo "::error::dists/jammy/InRelease is missing -- the repo is UNSIGNED."
+            echo "::error::Set the GPG_PRIVATE_KEY and GPG_PASSPHRASE repository secrets, then re-run."
+            exit 1
+          fi
+          echo "OK: InRelease present, repository is signed."
+
+          curl -fsSL "${base}/${{ env.REPO_NAME }}.asc" -o /tmp/key.asc
+          echo "OK: exported signing key $(head -1 /tmp/key.asc)"
