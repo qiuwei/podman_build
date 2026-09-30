@@ -125,24 +125,48 @@ done
 # Fail loudly if the podman package links a library we forgot to depend on.
 echo
 echo "== checking podman's shared-library dependencies are declared =="
+# objdump comes from binutils, which gcc pulls in via build-essential. Check
+# rather than assume: without it the lookup below would abort silently.
+if ! command -v objdump >/dev/null 2>&1; then
+    echo "error: objdump not found (binutils); cannot verify Depends" >&2
+    exit 1
+fi
+
 podman_deps="$(dpkg-deb -f "$OUTDIR/podman_${podman_debver}_amd64.deb" Depends | tr ',' '\n' | sed 's/^ *//;s/ *(.*//')"
 needed="$(objdump -p "$PODMAN_STAGE/usr/bin/podman" | awk '/NEEDED/{print $2}' | sort)"
 echo "   linked:  $(echo "$needed" | tr '\n' ' ')"
+
 missing=0
+unverified=0
 for lib in $needed; do
     case "$lib" in
+        # Provided by libc6 itself; a separate Depends entry would be redundant.
         libc.so.6|libpthread.so.0|librt.so.1|libdl.so.2|libm.so.6|libresolv.so.2) continue ;;
     esac
-    # map soname -> debian package name via the build container's dpkg
-    owner="$(dpkg -S "*/${lib}" 2>/dev/null | cut -d: -f1 | head -1)"
-    if [ -n "$owner" ] && ! echo "$podman_deps" | grep -qxF "$owner"; then
+    # The `|| true` inside the substitution is load-bearing, not decoration.
+    # `dpkg -S` exits non-zero when nothing matches, and when it matches several
+    # paths `head -n1` closes the pipe early, killing dpkg with SIGPIPE. Under
+    # `set -e -o pipefail` either case aborts this script with no message at all.
+    owner="$( { dpkg -S "*/${lib}" 2>/dev/null || true; } | head -n1 | cut -d: -f1 || true)"
+    if [ -z "$owner" ]; then
+        # Previously this branch was an implicit pass, which silently defeated
+        # the entire check whenever attribution failed.
+        echo "   unverifiable: no installed package owns ${lib}" >&2
+        unverified=1
+        continue
+    fi
+    if ! echo "$podman_deps" | grep -qxF "$owner"; then
         echo "   MISSING DEPENDS: ${lib} is provided by '${owner}'" >&2
         missing=1
     fi
 done
+
 if [ "$missing" -ne 0 ]; then
     echo "error: podman links libraries absent from its Depends field" >&2
     exit 1
+fi
+if [ "$unverified" -ne 0 ]; then
+    echo "warning: some linked libraries could not be attributed to a package" >&2
 fi
 echo "   ok: all linked libraries are covered by Depends"
 
