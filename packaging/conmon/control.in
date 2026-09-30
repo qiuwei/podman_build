@@ -11,7 +11,7 @@ Description: OCI container runtime monitor (built from source)
  handling and exit status reporting.
  .
  Built from the upstream v@UPSTREAM_VERSION@ tag. jammy ships conmon 2.0.25, which
- is four years older than podman 4.9.3 and below the version podman 4.x expects,
+ is four years older than podman 4.9.x and below the version podman 4.x expects,
  so this package supersedes it. The podman package depends on
  `conmon (>= 2.1.0)`, which apt cannot satisfy from jammy -- so this repository's
  build is always the one selected.

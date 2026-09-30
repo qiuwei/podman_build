@@ -22,25 +22,28 @@ backport and no usable PPA:
 
 So we build our own.
 
-## Why podman 4.9.3 specifically
+## Why the 4.9.x series
 
-This is the newest podman that can be built *natively* on jammy, and the newest
-one whose runtime dependencies jammy can actually satisfy. Three constraints
-converge:
+The binding constraint is the **network backend**, not Go:
 
-1. **Go version.** jammy's newest Go is `1.18`. podman 5.8.x and 6.1.x both
-   declare `go 1.26.0` in `go.mod`; only the 4.x series declares `go 1.18`.
-2. **Network backend.** jammy has no `netavark`/`aardvark-dns` packages. podman
-   **4.9.3 is the last release with CNI backend support** — podman 5.0 removed
-   it. We pin `network_backend = "cni"`, using jammy's
-   `containernetworking-plugins`.
-3. **Config packages.** jammy's `golang-github-containers-common` is `0.44.4`
-   (podman 3.x era) while podman 4.9.3 wants `>= 0.57.4`. We therefore vendor
-   `containers.conf`, `registries.conf` and `policy.json` ourselves.
+- **Network backend (the hard ceiling).** podman **5.0 removed the CNI
+  backend**, and jammy ships no `netavark`/`aardvark-dns`. CNI — via jammy's
+  `containernetworking-plugins` — is therefore the only backend available, which
+  caps us at the 4.9.x series. Going to 5.x/6.x means building `netavark` and
+  `aardvark-dns` from source as well.
+- **Go toolchain.** jammy's Go is `1.18`, which is *not enough*: podman 4.9.x
+  depends on `containers/buildah`, whose `go.mod` declares `go 1.20` (with
+  `containers/storage` adding a `go 1.19` floor). Go refuses to build a
+  dependency that declares a newer language version, so 4.9.x **cannot** be
+  built with the distro toolchain — podman's own `go 1.18` directive is simply
+  stale relative to its dependency tree. `scripts/00-build-deps.sh` installs Go
+  1.22 from upstream to clear this.
+- **Config packages.** jammy's `golang-github-containers-common` is `0.44.4`
+  (podman 3.x era) while podman 4.9.x wants `>= 0.57.4`, so we vendor
+  `containers.conf`, `registries.conf` and `policy.json` ourselves.
 
-Pushing past 4.9.3 means shipping a newer Go toolchain and building against
-glibc 2.35 in a combination upstream does not test, plus rebuilding the network
-stack. Not worth it for this fleet.
+Within the series we track the newest patch (`4.9.5`). The fleet currently runs
+`4.9.3` on frankfurt, so this is a straightforward upgrade.
 
 ## Using the repository
 
@@ -69,7 +72,7 @@ Pin-Priority: 990
 EOF
 
 sudo apt update
-apt-cache policy podman    # expect 4.9.3 from the Pages origin
+apt-cache policy podman    # expect 4.9.5 from the Pages origin
 sudo apt install podman
 ```
 
@@ -97,7 +100,7 @@ sudo apt install podman
 
 ### Why we ship our own conmon
 
-jammy's conmon is **2.0.25** (2021), four years older than podman 4.9.3.
+jammy's conmon is **2.0.25** (2021), four years older than podman 4.9.x.
 podman 4.x drives conmon considerably harder than podman 3.4.4 did, and that
 pairing is untested by upstream and by every distro. The `podman` package
 depends on `conmon (>= 2.1.0)`, which apt cannot satisfy from jammy — so ours is
@@ -136,12 +139,12 @@ gh workflow run build-apt-repo.yml -f podman_version=4.9.4
 ```
 
 To rebuild the *same* upstream version after a packaging change, bump
-`deb_revision` — the resulting version (`4.9.3-2~jammy1`) sorts above
-`4.9.3-1~jammy1`, so apt sees it as an upgrade.
+`deb_revision` — the resulting version (`4.9.5-2~jammy1`) sorts above
+`4.9.5-1~jammy1`, so apt sees it as an upgrade.
 
-Going to podman 5.x/6.x is not a version bump, it is a project: it needs a
-newer Go toolchain, a `netavark`+`aardvark-dns` build, and probably moving the
-whole thing to a noble base.
+Going to podman 5.x/6.x is not a version bump, it is a project: it needs
+`netavark` and `aardvark-dns` built from source (jammy has neither), plus a
+newer Go still, and probably moving the whole thing to a noble base.
 
 ## Known caveats
 
@@ -156,7 +159,7 @@ whole thing to a noble base.
   `jinnatar/actions-aptly-repo` was last updated in October 2024. Consider
   pinning it to a commit SHA, as kanidm does, rather than tracking `@v2`.
 - **The OCI runtime is jammy's.** jammy ships crun 0.17 (2021) and runc 1.1.0
-  (2022), both older than podman 4.9.3 itself. We do not pin `runtime` in
+  (2022), both older than podman 4.9.x itself. We do not pin `runtime` in
   `containers.conf`, so podman picks crun. **If containers fail to start, the
   OCI runtime is the first thing to suspect** — set `runtime = "runc"` in
   `/etc/containers/containers.conf.d/` and retest. Building a modern crun is the

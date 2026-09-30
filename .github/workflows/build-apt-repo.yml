@@ -18,7 +18,7 @@ name: Build podman for jammy and publish apt repo
       podman_version:
         description: "podman upstream tag to build (without the leading v)"
         required: false
-        default: "4.9.3"
+        default: "4.9.5"
       conmon_version:
         description: "conmon upstream tag to build (without the leading v)"
         required: false
@@ -37,10 +37,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # podman 4.9.3 is the newest release that builds with jammy's Go 1.18. podman
-  # 5.x/6.x require Go 1.26, and 4.9.3 is also the last series with the CNI
-  # backend that jammy's package set can actually support (no netavark/aardvark).
-  PODMAN_VERSION: ${{ inputs.podman_version || '4.9.3' }}
+  # The 4.9.x series is the newest podman jammy can run: podman 5.0 removed the
+  # CNI network backend and jammy has no netavark/aardvark-dns, so CNI is the
+  # only backend available. See scripts/20-build-podman.sh for the full rationale.
+  PODMAN_VERSION: ${{ inputs.podman_version || '4.9.5' }}
   CONMON_VERSION: ${{ inputs.conmon_version || '2.2.1' }}
   DEB_REVISION: ${{ inputs.deb_revision || '1' }}
   SUITE: jammy

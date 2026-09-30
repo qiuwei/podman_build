@@ -12,7 +12,7 @@ Description: Manage pods, containers and container images (built from source)
  This is NOT the distribution package. It is built from the upstream
  v@UPSTREAM_VERSION@ release tag and targeted at Ubuntu 22.04 (jammy), where the
  distribution ships only podman 3.4.4. See the packaging notes in the source
- repository for why 4.9.3 is the newest release that can be built here.
+ repository for why the 4.9.x series is the newest that jammy can run.
  .
  Build tags used: seccomp, systemd, apparmor, excluding the btrfs and
  devicemapper graph drivers.

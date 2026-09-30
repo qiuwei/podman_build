@@ -2,7 +2,7 @@
 # Build conmon from source and install it into $STAGE.
 #
 # Why we ship our own conmon: jammy's conmon is 2.0.25 (2021), four years older
-# than podman 4.9.3 (2024). podman 4.x drives conmon much harder than podman 3.x
+# than podman 4.9.x (2024). podman 4.x drives conmon much harder than podman 3.x
 # did (exit-command handling, cgroup delegation), and that pairing is not
 # something upstream or any distro tests. The podman package depends on
 # `conmon (>= 2.1.0)`, so apt is structurally forced to take ours.

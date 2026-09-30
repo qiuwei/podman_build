@@ -10,7 +10,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKDIR="${WORKDIR:-/build}"
-export PODMAN_VERSION="${PODMAN_VERSION:-4.9.3}"
+export PODMAN_VERSION="${PODMAN_VERSION:-4.9.5}"
 export CONMON_VERSION="${CONMON_VERSION:-2.2.1}"
 DEB_REVISION="${DEB_REVISION:-1}"
 SUITE="${SUITE:-jammy}"
@@ -78,7 +78,7 @@ build_deb "$CONMON_STAGE" conmon "$conmon_debver"
 echo "== packaging podman ${PODMAN_VERSION} =="
 
 # Vendor the container configs. jammy's golang-github-containers-common is
-# 0.44.4 (podman 3.x era) and cannot be depended on for podman 4.9.3, which
+# 0.44.4 (podman 3.x era) and cannot be depended on for podman 4.9.x, which
 # wants >= 0.57.4.
 install -d -m 0755 "$PODMAN_STAGE/usr/share/containers"
 install -m 0644 "$HERE/packaging/configs/containers.conf" \

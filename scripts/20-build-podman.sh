@@ -1,14 +1,17 @@
 #!/bin/bash
 # Build podman from source and install it into $STAGE.
 #
-# Targets podman 4.9.3 specifically. That is not arbitrary: it is the newest
-# podman release that builds with jammy's Go 1.18. podman 5.8.x and 6.1.x both
-# declare `go 1.26.0` in go.mod, and 4.9.3 also the last series with CNI
-# network-backend support (removed in 5.0). jammy has no netavark/aardvark-dns,
-# so CNI is the only backend available to us. v4.9.3 is the sweet spot.
+# Targets the 4.9.x series (newest patch by default). The binding constraint is
+# the NETWORK BACKEND, not Go: podman 5.0 removed the CNI backend, and jammy has
+# no netavark/aardvark-dns packages, so CNI -- via jammy's
+# containernetworking-plugins -- is the only backend available here. That makes
+# 4.9.x the newest podman that can actually run on jammy at all.
+#
+# (Go is a separate problem: buildah forces a `go >= 1.20` floor that jammy's
+# 1.18 toolchain cannot meet, so 00-build-deps.sh installs Go from upstream.)
 set -euo pipefail
 
-PODMAN_VERSION="${PODMAN_VERSION:-4.9.3}"
+PODMAN_VERSION="${PODMAN_VERSION:-4.9.5}"
 WORKDIR="${WORKDIR:-/build}"
 STAGE="${STAGE:-${WORKDIR}/stage-podman}"
 STAGE_DOCKER="${STAGE_DOCKER:-${WORKDIR}/stage-podman-docker}"
