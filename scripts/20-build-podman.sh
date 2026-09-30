@@ -40,7 +40,12 @@ fi
 cd "podman-${PODMAN_VERSION}"
 
 echo "== building podman (BUILDTAGS=${BUILDTAGS}) =="
-make -j"$(nproc)" BUILDTAGS="$BUILDTAGS" binaries
+# `docs` is required, not optional. `install.man` installs $(MANPAGES_DEST) --
+# files under docs/build/man/ -- but declares no prerequisite on the `docs`
+# target that generates them, so `make install` alone dies with a hundred
+# "cannot stat 'docs/build/man/podman-*.1'" errors. Upstream's own entry point
+# is `all: binaries docs`; we must ask for both explicitly.
+make -j"$(nproc)" BUILDTAGS="$BUILDTAGS" binaries docs
 
 echo "== staging binaries, units, man pages =="
 rm -rf "$STAGE" "$STAGE_DOCKER"
