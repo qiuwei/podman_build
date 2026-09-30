@@ -1,0 +1,73 @@
+Package: conmon
+Priority: optional
+Section: admin
+Maintainer: HPC Infrastructure <root@localhost>
+Architecture: amd64
+Version: 2.2.1-1~jammy1
+Filename: pool/jammy/stable/c/conmon/conmon_2.2.1-1~jammy1_amd64.deb
+Size: 41290
+MD5sum: 5a229d2fc2c4d7dcf3cd9bcdd15fccbc
+SHA1: a1b60462335a2384cd42ae44c7500de4a51c116b
+SHA256: ca5d05ef9502426a142c1515b058f10957ed66ea877e150b4dab62e8de785788
+SHA512: 3a5adaa9670c56e79e48fee92399ccd9d2b8379b6c1df880ce54d7cde64a73925a25753dcc2400964682d02d8a609f78db09a886e93f10395a290ecde4df25e3
+Description: OCI container runtime monitor (built from source)
+ Conmon is a small program that sits between a container runtime (crun, runc)
+ and podman, supervising the container process and handling logging, TTY
+ handling and exit status reporting.
+ .
+ Built from the upstream v2.2.1 tag. jammy ships conmon 2.0.25, which
+ is four years older than podman 4.9.x and below the version podman 4.x expects,
+ so this package supersedes it. The podman package depends on
+ `conmon (>= 2.1.0)`, which apt cannot satisfy from jammy -- so this repository's
+ build is always the one selected.
+Homepage: https://github.com/containers/conmon
+
+Package: podman
+Priority: optional
+Section: admin
+Maintainer: HPC Infrastructure <root@localhost>
+Architecture: amd64
+Version: 4.9.5-1~jammy1
+Depends: conmon (>= 2.1.0), crun | runc, containernetworking-plugins, iptables, tzdata, libapparmor1, libc6 (>= 2.34), libgcc-s1, libgpgme11 (>= 1.4.1), libseccomp2 (>= 2.5.0), libsqlite3-0, libsystemd0
+Recommends: buildah, catatonit, fuse-overlayfs, slirp4netns, uidmap
+Suggests: podman-docker
+Filename: pool/jammy/stable/p/podman/podman_4.9.5-1~jammy1_amd64.deb
+Size: 53642138
+MD5sum: b1b0ecaf50dd29ee3ac4fed8caa4945b
+SHA1: 2187175db68de114d8e00fc3c96674b9594f2700
+SHA256: b096139d79d297e3f2a70126b6405db891c82e2149b68546ea4816f163495fcb
+SHA512: 072ea1c0a5e33637c96bbe40544316a1d308d3f02fc1f1d841a4aa6307921d1515bfb5744026517f36bdfb80f395c8bfa8ea7330fa1fd1b2730e2f95b4489257
+Description: Manage pods, containers and container images (built from source)
+ Podman is a daemonless container engine for developing, managing and running
+ OCI containers and pods.
+ .
+ This is NOT the distribution package. It is built from the upstream
+ v4.9.5 release tag and targeted at Ubuntu 22.04 (jammy), where the
+ distribution ships only podman 3.4.4. See the packaging notes in the source
+ repository for why the 4.9.x series is the newest that jammy can run.
+ .
+ Build tags used: seccomp, systemd, apparmor, excluding the btrfs and
+ devicemapper graph drivers.
+Homepage: https://podman.io
+
+Package: podman-docker
+Priority: optional
+Section: admin
+Maintainer: HPC Infrastructure <root@localhost>
+Architecture: amd64
+Version: 4.9.5-1~jammy1
+Depends: podman (= 4.9.5-1~jammy1)
+Conflicts: docker.io, docker-ce, docker-ce-cli, docker-engine
+Filename: pool/jammy/stable/p/podman-docker/podman-docker_4.9.5-1~jammy1_amd64.deb
+Size: 1066
+MD5sum: 83714126c61fdd01b8d4d74143bd11f9
+SHA1: deaa5788a8e98fa0205e9aa8e132a155af8dab13
+SHA256: cbdf0c27ec421eaa435a75d6c1b2e3852520950c89cb573860ed213be6a0a130
+SHA512: a41a775350b4d35d939175d54abbcfb69a004e089468c1ac4af7eadb42b905e1d4b126dad9d48098a7f79cbadf36181f70c04eee9020a49114cbfd8697364962
+Description: Emulate the Docker CLI with podman
+ Installs a /usr/bin/docker shim that forwards to podman, so tooling which shells
+ out to `docker` works against podman unchanged.
+ .
+ Optional. Only install this on hosts that do not have a real Docker daemon.
+Homepage: https://podman.io
+
