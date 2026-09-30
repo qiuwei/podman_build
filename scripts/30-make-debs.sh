@@ -34,13 +34,30 @@ rm -f "$OUTDIR"/*.deb
 
 render_control() {
     # render_control <control.in> <dest> <debver> <upstreamver>
+    #
+    # Debian control files have NO comment syntax. A line starting with '#' is
+    # parsed as a field name and dpkg-deb aborts with the thoroughly unhelpful
+    # "field name '#' must be followed by colon". We want the comments in the
+    # templates -- they document where each dependency comes from -- so strip
+    # them here instead. Blank lines are also invalid inside a package
+    # paragraph, so drop those too. (A legal blank line in a Description is
+    # " .", which does not match either pattern.)
     local src="$1" dest="$2" debver="$3" upstream="$4"
     sed -e "s|@VERSION@|${debver}|g" \
         -e "s|@UPSTREAM_VERSION@|${upstream}|g" \
         -e "s|@MAINTAINER@|${MAINTAINER}|g" \
+        -e '/^[[:space:]]*#/d' \
+        -e '/^[[:space:]]*$/d' \
         "$src" >"$dest"
     # control files must be world-readable, not executable
     chmod 0644 "$dest"
+
+    # Fail here with a clear message rather than letting dpkg-deb produce a
+    # cryptic parse error much later in the run.
+    if grep -qE '^[[:space:]]*#' "$dest"; then
+        echo "error: comment survived rendering in ${dest}" >&2
+        exit 1
+    fi
 }
 
 # Every file we install under /etc must be declared as a conffile, otherwise apt

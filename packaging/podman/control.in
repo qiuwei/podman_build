@@ -40,7 +40,9 @@ Recommends: buildah,
             slirp4netns,
             uidmap
 Suggests: podman-docker
-# No Conflicts on the distro podman: this package *replaces* it, and a Conflicts
-# without a matching Replaces would make the upgrade fail outright.
-Replaces: podman
-Provides: podman
+# No Replaces/Provides/Conflicts on the distro podman, deliberately. Our package
+# name matches the distribution's exactly, so apt sees a normal version upgrade
+# (3.4.4 -> 4.9.x) and needs no relationship fields to permit it. Replaces and
+# Provides naming our own package would be self-referential no-ops, and a
+# Conflicts here would actively block the upgrade -- Conflicts without a
+# matching Replaces refuses to proceed rather than replacing.

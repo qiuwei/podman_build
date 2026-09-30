@@ -81,8 +81,14 @@ step, with a ready-made line per distribution and component.
 
 ### Upgrading from the distro package
 
-The packages `Replaces:` their distro counterparts. Removing podman 3.4.4 drops
-its images and containers unless you migrate the store first:
+Our package name matches the distribution's, so `apt install podman` is an
+ordinary version upgrade (`3.4.4` → `4.9.x`). No `Replaces`/`Conflicts` are
+involved — and adding a `Conflicts` would actively break the upgrade, since
+`Conflicts` without a matching `Replaces` refuses to proceed rather than
+replacing.
+
+Note that swapping podman drops its images and containers unless you migrate the
+store first:
 
 ```bash
 sudo podman ps -a          # note what exists

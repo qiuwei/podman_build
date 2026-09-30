@@ -15,5 +15,5 @@ Description: OCI container runtime monitor (built from source)
  so this package supersedes it. The podman package depends on
  `conmon (>= 2.1.0)`, which apt cannot satisfy from jammy -- so this repository's
  build is always the one selected.
-Replaces: conmon
-Provides: conmon
+# No Replaces/Provides: the package name matches jammy's conmon, so this is a
+# plain version upgrade (2.0.25 -> 2.2.1) and apt needs no relationship fields.
